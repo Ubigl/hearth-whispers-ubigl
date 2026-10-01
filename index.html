@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hearth & Whispers</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;1,400&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d1230;--ink:#fff3dc;--glow:#ffb347;--panel:rgba(20,16,40,.72);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:Nunito,system-ui,sans-serif;overflow:hidden}
+canvas{position:fixed;inset:0;display:block}
+.p{position:fixed;background:var(--panel);backdrop-filter:blur(8px);border:1px solid rgba(255,179,71,.3);border-radius:14px;padding:10px 14px}
+#hud{top:calc(10px + env(safe-area-inset-top,0px));left:10px}
+#hud b{font-family:Fraunces,Georgia,serif;font-size:28px;color:var(--glow)}
+#hud small{opacity:.8;display:block}
+#ro{top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:6px;max-width:46vw;flex-wrap:wrap;justify-content:center}
+button{font:inherit;color:inherit;cursor:pointer}
+.chip{background:none;border:1px solid rgba(255,243,220,.25);border-radius:10px;padding:5px 9px;font-size:13px}
+.chip.on{background:var(--glow);color:#241320;border-color:var(--glow)}
+.chip[disabled]{opacity:.45;cursor:default}
+#up{top:calc(10px + env(safe-area-inset-top,0px));right:10px;width:210px;display:flex;flex-direction:column;gap:6px}
+#up h4{margin:0;font-family:Fraunces,serif;font-weight:500;font-style:italic}
+.u{text-align:left;background:rgba(255,255,255,.06);border:1px solid rgba(255,243,220,.2);border-radius:10px;padding:7px 9px;font-size:13px}
+.u:hover:not([disabled]){border-color:var(--glow)}
+.u[disabled]{opacity:.5;cursor:default}
+.u span{display:block;opacity:.75;font-weight:600;font-size:12px}
+#dlg{left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(640px,calc(100vw - 20px));padding:14px 18px}
+#who{font-family:Fraunces,serif;font-style:italic;color:var(--glow);font-size:15px}
+#bar{height:5px;background:rgba(255,255,255,.12);border-radius:3px;margin:4px 0 8px}
+#bar i{display:block;height:100%;width:0;background:var(--glow);border-radius:3px;transition:width .3s}
+#txt{font-family:Fraunces,Georgia,serif;font-size:19px;line-height:1.5;min-height:58px}
+#ch{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+#ch button{flex:1 1 200px;background:rgba(255,179,71,.14);border:1px solid var(--glow);border-radius:10px;padding:9px 12px;font-weight:600;text-align:left}
+#ch button:hover{background:rgba(255,179,71,.32)}
+#ch small{display:block;opacity:.7;font-weight:600}
+.fl{position:fixed;pointer-events:none;font-weight:800;color:var(--glow);text-shadow:0 0 8px #000;animation:up 1.4s forwards;z-index:9}
+@keyframes up{to{transform:translateY(-70px);opacity:0}}
+@media(max-width:700px){#up{width:150px;font-size:12px}#ro{top:auto;bottom:210px;left:10px;transform:none;max-width:calc(100vw - 20px)}#txt{font-size:16px}}
+@media(prefers-reduced-motion:reduce){.fl{animation-duration:.01s}}
+</style></head><body>
+<div id="hud" class="p"><b id="st">0</b> embers<small id="ps"></small></div>
+<div id="ro" class="p"></div>
+<div id="up" class="p"><h4>Make camp cozier</h4></div>
+<div id="dlg" class="p"><div id="who"></div><div id="bar"><i></i></div><div id="txt"></div><div id="ch"></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const CH=[
+{id:"fox",name:"Rin the Fox",at:0,col:0xe8803a,L:[
+{q:"The fire remembers every story told near it. Tell me, what brought you to this clearing?",a:["I was lost, and the light called to me.","I follow rumors of a place that never gets cold."],r:["Then you are exactly where you should be.","A rumor with a fire at its heart. We shall see."]},
+{q:"I once chased my own tail for an hour. Dignity is overrated.",a:["Dignity warms no one. Laughter does.","Did you at least catch it?"],r:["You are good at this. Stay.","Almost! Almost."]},
+{q:"Do you hear that? The embers whisper when someone is kind.",a:["Then I will be kind, loudly.","What do they say?"],r:["Ha! The sparks leap higher.","Your name. Over and over."]}]},
+{id:"owl",name:"Hoot the Owl",at:25,col:0x9a7b5a,L:[
+{q:"Hoo. A newcomer who sits instead of shouting. Rare. What do you carry in your pockets?",a:["Nothing but time, and I would spend it here.","A small riddle, if you want it."],r:["The wisest purse there is.","Hoo! Pay me in riddles and I am rich."]},
+{q:"Three moons ago I forgot the word for 'tomorrow'. It returned. They always do.",a:["Some things come back when we stop chasing.","Then what is it?"],r:["Patience: the oldest magic.","Ah. Now I forgot again."]},
+{q:"Stars are only lanterns the sky forgot to put out.",a:["Maybe we can light a few more down here.","That is lovely. Say another."],r:["Yes. Yes, that is the idea.","Flattery! Delightful. Hoo."]}]},
+{id:"frog",name:"Pip the Frog",at:120,col:0x58b368,L:[
+{q:"Ribbit! Is it true humans have to pay for every warm thing?",a:["Not the best warm things, friend.","Mostly. Embers are the cheapest."],r:["I will tell the whole pond!","Then I am a very rich frog."]},
+{q:"I tried to sing for the moon. A log fell on me. Is that a review?",a:["It means the forest is listening.","Sing again. I will keep the log away."],r:["The forest. Of course!","Brave, I will. A little."]},
+{q:"Sit closer. The puddle by my foot is a tiny sea.",a:["I will sit. Show me the tides.","Is that where the stars fall?"],r:["Splash. It is high tide now.","Only the polite ones."]}]},
+{id:"moth",name:"Lumi the Moth Spirit",at:500,col:0xbfa8ff,L:[
+{q:"I am what the lantern dreams about. You made a place bright enough to dream in.",a:["Then stay, and dream with us.","What do lanterns dream?"],r:["Always. Always.","Of being looked at kindly."]},
+{q:"Every ember you gather is a small yes said to the dark.",a:["Then I will keep saying yes.","And the dark, does it answer?"],r:["The night grows soft around you.","It hums, when it is well fed."]},
+{q:"The camp is complete when no one is a stranger.",a:["Then it is already complete.","One more story, please."],r:["...Then I will glow forever.","Gladly. Gather close."]}]}];
+const UP=[{k:"lantern",n:"Hanging lantern",d:"+12% embers per talk",c:20,g:1.6,max:8},
+{k:"jar",n:"Firefly jar",d:"Friends tell tales on their own",c:60,g:1.7,max:12},
+{k:"fire",n:"Bigger bonfire",d:"Bonds deepen faster",c:40,g:1.65,max:6}];
+let S={e:0,t:0,c:{},u:{lantern:0,jar:0,fire:0}};
+try{const d=JSON.parse(localStorage.getItem("hw1"));if(d)S=d}catch(e){}
+CH.forEach(c=>S.c[c.id]=S.c[c.id]||{lv:0,b:0,n:0});
+let cur="fox",busy=false;
+const need=c=>4+3*S.c[c.id].lv, cost=u=>Math.floor(u.c*Math.pow(u.g,S.u[u.k]));
+const gain=c=>(2+S.c[c.id].lv*1.5)*(1+.12*S.u.lantern);
+const pas=()=>CH.reduce((a,c)=>a+(S.t>=c.at?S.c[c.id].lv*.6:0),0)*(1+.3*S.u.jar);
+const fmt=n=>n>=1e4?(n/1e3).toFixed(1)+"k":Math.floor(n);
+function pop(t){const e=document.createElement("div");e.className="fl";e.textContent=t;e.style.left=(innerWidth/2-20+Math.random()*80)+"px";e.style.top=(innerHeight*.4)+"px";document.body.appendChild(e);setTimeout(()=>e.remove(),1400)}
+function type(el,t){clearInterval(el._i);let i=0;el.textContent="";el._i=setInterval(()=>{el.textContent=t.slice(0,++i);if(i>=t.length)clearInterval(el._i)},18)}
+function line(){const c=CH.find(x=>x.id===cur),s=S.c[c.id],L=c.L[s.n%c.L.length];
+ $("who").textContent=c.name+"  ·  bond "+s.lv;$("bar").firstChild.style.width=(100*s.b/need(c))+"%";
+ type($("txt"),"“"+L.q+"”");const box=$("ch");box.innerHTML="";busy=false;
+ L.a.forEach((a,i)=>{const b=document.createElement("button");
+  b.innerHTML=a+"<small>"+(i?"+"+Math.round(gain(c))+" embers":"+bond, +"+Math.round(gain(c)*.4)+" embers")+"</small>";
+  b.onclick=()=>pick(c,L,i);box.appendChild(b)})}
+function pick(c,L,i){if(busy)return;busy=true;const s=S.c[c.id];let g=gain(c);
+ if(i){S.e+=g;S.t+=g;pop("+"+Math.round(g)+" embers")}
+ else{g*=.4;S.e+=g;S.t+=g;s.b+=1+S.u.fire*.5;pop("+bond");
+  if(s.b>=need(c)){s.b=0;s.lv++;pop(c.name+" trusts you more!")}}
+ s.n++;$("bar").firstChild.style.width=(100*s.b/need(c))+"%";
+ $("who").textContent=c.name+"  ·  bond "+s.lv;type($("txt"),"“"+L.r[i]+"”");
+ const b=document.createElement("button");b.textContent="Keep talking";b.onclick=line;$("ch").innerHTML="";$("ch").appendChild(b);bounce[c.id]=1;ui()}
+function ui(){$("st").textContent=fmt(S.e);$("ps").textContent=pas().toFixed(1)+" embers / sec from friends";
+ const r=$("ro");r.innerHTML="";CH.forEach(c=>{const b=document.createElement("button"),un=S.t>=c.at;b.className="chip"+(cur===c.id?" on":"");
+  b.disabled=!un;b.textContent=un?c.name.split(" ")[0]+" ♥"+S.c[c.id].lv:"🔒 "+c.at+" total";
+  b.onclick=()=>{cur=c.id;line();ui()};r.appendChild(b);
+  if(un&&!c.seen){c.seen=1;chars[c.id].visible=true}});
+ const u=$("up");u.querySelectorAll(".u").forEach(x=>x.remove());
+ UP.forEach(p=>{const b=document.createElement("button"),n=S.u[p.k],mx=n>=p.max;b.className="u";b.disabled=mx||S.e<cost(p);
+  b.innerHTML=p.n+" ("+n+"/"+p.max+")<span>"+p.d+" · "+(mx?"maxed":Math.floor(cost(p))+" embers")+"</span>";
+  b.onclick=()=>{S.e-=cost(p);S.u[p.k]++;build();ui()};u.appendChild(b)})}
+/* ---------- 3D ---------- */
+const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,2));R.setSize(innerWidth,innerHeight);document.body.prepend(R.domElement);
+const sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,200);
+sc.fog=new THREE.FogExp2(0x151a40,.022);
+const sky=new THREE.Mesh(new THREE.SphereGeometry(90,24,16),new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,
+ uniforms:{},vertexShader:"varying float h;void main(){h=normalize(position).y;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
+ fragmentShader:"varying float h;void main(){vec3 lo=vec3(.95,.45,.35),mid=vec3(.2,.17,.45),hi=vec3(.03,.04,.14);vec3 c=mix(lo,mid,smoothstep(-.05,.25,h));c=mix(c,hi,smoothstep(.2,.8,h));gl_FragColor=vec4(c,1.);}"}));
+sc.add(sky);
+sc.add(new THREE.HemisphereLight(0x6a6cc8,0x1d2a1a,.55));
+const fl=new THREE.PointLight(0xff9a3c,2.2,22);fl.position.set(0,1.6,0);sc.add(fl);
+const moonL=new THREE.DirectionalLight(0x9db4ff,.5);moonL.position.set(-20,30,-10);sc.add(moonL);
+const M=(c,e)=>new THREE.MeshStandardMaterial({color:c,flatShading:true,roughness:.9,emissive:e||0,emissiveIntensity:e?1:0});
+const ground=new THREE.Mesh(new THREE.CircleGeometry(40,48),M(0x24402f));ground.rotation.x=-Math.PI/2;sc.add(ground);
+const ring=new THREE.Mesh(new THREE.CircleGeometry(5.2,40),M(0x3b3a2c));ring.rotation.x=-Math.PI/2;ring.position.y=.01;sc.add(ring);
+const moon=new THREE.Mesh(new THREE.SphereGeometry(4,24,16),new THREE.MeshBasicMaterial({color:0xfff6d8,fog:false}));moon.position.set(-30,34,-55);sc.add(moon);
+const sp=[];for(let i=0;i<500;i++){const a=Math.random()*6.28,h=Math.random()*1.2+.1,r=80;sp.push(Math.cos(a)*r*(1-h*.4),h*r*.7+8,Math.sin(a)*r*(1-h*.4))}
+const sg=new THREE.BufferGeometry();sg.setAttribute("position",new THREE.Float32BufferAttribute(sp,3));
+sc.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xffffff,size:.7,fog:false})));
+for(let i=0;i<46;i++){const a=i*2.4,r=9+Math.random()*16,g=new THREE.Group(),s=.8+Math.random()*1.2;
+ for(let k=0;k<3;k++){const c=new THREE.Mesh(new THREE.ConeGeometry(1.6-k*.4,2.2,7),M(0x14402f+k*0x0a0800));c.position.y=1.6+k*1.2;g.add(c)}
+ const t=new THREE.Mesh(new THREE.CylinderGeometry(.2,.3,1.4,6),M(0x4a3020));t.position.y=.7;g.add(t);
+ g.scale.setScalar(s);g.position.set(Math.cos(a)*r,0,Math.sin(a)*r);sc.add(g)}
+const fire=new THREE.Group();sc.add(fire);
+const flames=[0xff5a1f,0xff9a3c,0xffd36b].map((c,i)=>{const m=new THREE.Mesh(new THREE.ConeGeometry(.6-i*.15,1.6-i*.3,7),new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.92}));m.position.y=.8;fire.add(m);return m});
+for(let i=0;i<5;i++){const l=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,1.4,6),M(0x4a2c18));l.position.set(Math.cos(i*1.26)*.6,.15,Math.sin(i*1.26)*.6);l.rotation.z=1.4;l.rotation.y=-i*1.26;fire.add(l)}
+function mk(type,col){const g=new THREE.Group(),b=(geo,c,x,y,z,s)=>{const m=new THREE.Mesh(geo,M(c));m.position.set(x,y,z);if(s)m.scale.set(...s);g.add(m);return m},
+ S_=new THREE.SphereGeometry(1,14,10),C=new THREE.ConeGeometry(1,1,5),E=(x,y,z,r)=>b(S_,0x111111,x,y,z,[r,r,r]);
+ if(type==="fox"){b(S_,col,0,.6,0,[.55,.6,.7]);b(S_,col,0,1.3,.25,[.38,.34,.4]);b(C,col,-.22,1.7,.2,[.14,.3,.14]);b(C,col,.22,1.7,.2,[.14,.3,.14]);
+  b(S_,0xfff0e0,0,1.18,.55,[.18,.14,.16]);E(-.14,1.35,.55,.05);E(.14,1.35,.55,.05);b(S_,col,0,.55,-.8,[.22,.22,.6]).rotation.x=.6;b(S_,0xffffff,0,.7,-1.2,[.14,.14,.2])}
+ if(type==="owl"){b(S_,col,0,.8,0,[.6,.8,.55]);b(S_,0xfff0c0,0,.75,.35,[.38,.5,.3]);b(S_,0xffffff,-.22,1.3,.4,[.2,.2,.1]);b(S_,0xffffff,.22,1.3,.4,[.2,.2,.1]);
+  E(-.22,1.3,.5,.08);E(.22,1.3,.5,.08);b(C,0xe0a030,0,1.15,.55,[.1,.18,.1]).rotation.x=1.5;b(C,col,-.35,1.8,0,[.12,.3,.12]);b(C,col,.35,1.8,0,[.12,.3,.12]);
+  b(S_,0x6b5238,-.6,.8,0,[.1,.5,.35]);b(S_,0x6b5238,.6,.8,0,[.1,.5,.35])}
+ if(type==="frog"){b(S_,col,0,.5,0,[.65,.5,.7]);b(S_,col,0,.95,.3,[.5,.3,.4]);b(S_,0xffffff,-.3,1.25,.4,[.18,.18,.18]);b(S_,0xffffff,.3,1.25,.4,[.18,.18,.18]);
+  E(-.3,1.27,.55,.08);E(.3,1.27,.55,.08);b(S_,0xe88a8a,0,.88,.62,[.28,.05,.1]);b(S_,0x3f9150,-.5,.15,.4,[.2,.15,.4]);b(S_,0x3f9150,.5,.15,.4,[.2,.15,.4])}
+ if(type==="moth"){const m=b(S_,col,0,1.1,0,[.3,.5,.3]);m.material=new THREE.MeshBasicMaterial({color:col});
+  for(const s of[-1,1]){const w=b(S_,0xe6d9ff,s*.6,1.25,-.05,[.55,.7,.05]);w.material=new THREE.MeshBasicMaterial({color:0xd8c8ff,transparent:true,opacity:.75});w.rotation.z=s*.5;w.name="w"}
+  const l=new THREE.PointLight(0xb89cff,1.2,9);l.position.y=1.2;g.add(l)}
+ return g}
+const chars={},bounce={};
+CH.forEach((c,i)=>{const g=mk(c.id,c.col),a=i*1.57+.8;g.position.set(Math.cos(a)*3.2,0,Math.sin(a)*3.2);g.lookAt(0,0,0);if(c.id==="moth")g.position.y=.4;
+ g.userData={id:c.id,base:g.position.y};g.visible=S.t>=c.at;c.seen=g.visible;chars[c.id]=g;sc.add(g)});
+const lant=[],jarG=new THREE.Group();sc.add(jarG);
+const fg=new THREE.BufferGeometry(),fp=new Float32Array(36*3),fs=[];for(let i=0;i<36;i++){fs.push([Math.random()*6.28,2+Math.random()*7,Math.random()*3+1,Math.random()*6]);}
+fg.setAttribute("position",new THREE.BufferAttribute(fp,3));
+const ff=new THREE.Points(fg,new THREE.PointsMaterial({color:0xfff07a,size:.35,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false}));sc.add(ff);
+function build(){while(lant.length<Math.min(S.u.lantern,8)){const i=lant.length,a=i*.785+.4,r=5.6,g=new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(.06,.08,2.6,6),M(0x3a2a1c)).translateY(1.3));
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(.26,10,8),new THREE.MeshBasicMaterial({color:0xffc86b})).translateY(2.7));
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(.5,10,8),new THREE.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.22})).translateY(2.7));
+  g.position.set(Math.cos(a)*r,0,Math.sin(a)*r);sc.add(g);lant.push(g)}
+ ff.geometry.setDrawRange(0,Math.min(36,S.u.jar*3));fire.scale.setScalar(1+S.u.fire*.18);fl.intensity=2.2+S.u.fire*.35}
+/* camera + input */
+let ang=0.3,tgt=0;const ray=new THREE.Raycaster(),mv=new THREE.Vector2();
+R.domElement.addEventListener("click",e=>{mv.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(mv,cam);
+ for(const h of ray.intersectObjects(Object.values(chars).filter(g=>g.visible),true)){let o=h.object;while(o&&!o.userData.id)o=o.parent;if(o){cur=o.userData.id;line();ui();return}}});
+addEventListener("resize",()=>{R.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()});
+let last=performance.now(),acc=0,sv=0,T=0;
+function loop(now){requestAnimationFrame(loop);const dt=Math.min((now-last)/1000,.1);last=now;T+=dt;
+ const p=pas()*dt;S.e+=p;S.t+=p;acc+=dt;sv+=dt;if(acc>.4){acc=0;ui()}if(sv>5){sv=0;try{localStorage.setItem("hw1",JSON.stringify(S))}catch(e){}}
+ ang+=dt*.05;const r=window.innerWidth<700?12:9.5;cam.position.set(Math.cos(ang)*r,4.2+Math.sin(T*.2)*.3,Math.sin(ang)*r);cam.lookAt(0,1.1,0);
+ fl.position.y=1.6+Math.sin(T*20)*.1;fl.intensity=(2.2+S.u.fire*.35)*(.85+Math.sin(T*17)*.1+Math.random()*.1);
+ flames.forEach((f,i)=>{f.scale.set(1+Math.sin(T*9+i)*.12,1+Math.sin(T*13+i*2)*.18,1+Math.cos(T*8+i)*.12);f.rotation.y=T*2+i});
+ for(const id in chars){const g=chars[id],sp=id===cur?1:0,b=bounce[id]||0;bounce[id]=Math.max(0,b-dt*3);
+  g.position.y=g.userData.base+Math.abs(Math.sin(T*(2+sp*2)+g.id))*(.05+sp*.08)+b*.25+(id==="moth"?Math.sin(T*2)*.15:0);
+  const s=1+sp*.1;g.scale.setScalar(g.scale.x+(s-g.scale.x)*.1);g.children.forEach(c=>{if(c.name==="w")c.rotation.y=Math.sin(T*14)*.5})}
+ lant.forEach((l,i)=>l.children[2].scale.setScalar(1+Math.sin(T*3+i)*.12));
+ const pa=ff.geometry.attributes.position;fs.forEach((f,i)=>{pa.setXYZ(i,Math.cos(f[0]+T*.2*f[2]/3)*(f[1]),1+f[3]*.4+Math.sin(T+f[3])*.6,Math.sin(f[0]+T*.2*f[2]/3)*(f[1]))});pa.needsUpdate=true;
+ R.render(sc,cam)}
+build();ui();line();requestAnimationFrame(loop);
+</script></body></html>
